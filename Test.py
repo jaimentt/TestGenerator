@@ -3,6 +3,9 @@ from pdf2image import convert_from_path
 import pytesseract
 from enum import Enum
 import random
+from os import remove
+import os 
+import re
 
 class Quest:
 
@@ -18,7 +21,7 @@ class Quest:
     #<isCorrets> = True = pertenece al conjunto de respuestas, else False 
     #<explanation> = justificacion de <isCorrect>
     def addOption(self, statement: str, isCorrect : bool, explanation:str='' ):
-        index = len(self.answer)
+        index = len(self.options)
         self.options.append(statement)
         self.explanations.append(explanation)
         if isCorrect :
@@ -51,15 +54,23 @@ class Quest:
         string = self.statement 
         for a in self.options :
             string += '\t' + a 
+        string += "Anwer :" + str(self.answer) 
         return string
 
 class Test:
     
-    def __init__(self,  file : str , sourcePDF: str = None):
-        if sourcePDF == None:
+    def __init__(self,  file : str , sourcePDF: str = None, sourceDir: str = None):
+        images = []
+        if sourcePDF == None  and sourceDir == None:
             self.setQuests(file)
-        else:
+        elif sourcePDF != None:
             images = self.getImages(sourcePDF)
+            if self.readImages(images, file):
+                self.setQuests(file)
+            self.deleteImages(images)
+        else: 
+            for file in os.listdir(sourceDir):
+                images += self.getImages(file)
             if self.readImages(images, file):
                 self.setQuests(file)
             self.deleteImages(images)
@@ -67,17 +78,27 @@ class Test:
     #separa el archivo <filePDF> en imagenes PNG
     #devuelve una lista con el nombre de las fotos generadas
     def getImages(self, filePDF : str) -> list[str]:
-        imageFiles = []
-        images = convert_from_path(filePDF, dpi=100)
-        for i, page in enumerate(images):
-            idx= 'image_'+str(i)+'.jpg' ##or ".png"
-            page.save(idx, 'JPEG')
-            imageFiles.append(idx)
-        return imageFiles
+        try:
+            imageFiles = []
+            images = convert_from_path(filePDF, dpi=100)
+            for i, page in enumerate(images):
+                idx= 'image_' + filePDF + '_' +str(i)+'.jpg' ##or ".png"
+                page.save(idx, 'JPEG')
+                imageFiles.append(idx)
+            print(filePDF +" se convirtio en imagenes correctamente")
+            return imageFiles
+        except:
+            print ("Error al leer " + filePDF)
+            return []
 
     #elimina los achivos indicados en <images>
     def deleteImages(self, images:list[str]) -> bool:
-        return True
+        try : 
+            for img in images:
+                remove(img)
+            return True
+        except :
+            return False
     
 
     #escribe el texto incluido en las imagenes contnidas en  <images> y 
@@ -104,10 +125,13 @@ class Test:
             self.quests : list[Quest] = []
             f= open(file, 'r')
             print('Archivo abierto')
+            patronPregunta = re.compile(r'Q[0-9]*\)')
             for linea in f:
                 #nos saltamos las lineas iniciales e los distintos test
                 if linea.startswith('Answer Sheet'):
-                    print('Nueva Parte')
+                    #print('Nueva Parte')
+                    continue
+                if not linea.strip():
                     continue
                 #dividimos la linea en palabras
                 #tokens = linea.split[" "]
@@ -116,7 +140,7 @@ class Test:
                 #print(state)
                 match state:
                     case self.State.Init:
-                        if lineaSinEspacios[0]== 'Q' and lineaSinEspacios[2] == ')':
+                        if patronPregunta.search(lineaSinEspacios) != None:
                             statement = linea
                             state = self.State.Statement
                         else: 
@@ -130,38 +154,50 @@ class Test:
                         else :
                             statement += linea
                     case self.State.Option:
-                        if lineaSinEspacios[0] == '@' : 
+                        
+                        if patronPregunta.search(lineaSinEspacios) != None:
+                            state = self.State.Statement
+                            statement = statement.replace('@', ' ').lstrip()
+                            q.addOption(statement, isCorrect)
+                            self.quests.append(q)
+                            statement = linea
+                        elif lineaSinEspacios[0] == '@' : 
+                            statement = statement.replace('@', ' ').lstrip()
                             q.addOption(statement, isCorrect)
                             isCorrect = lineaSinEspacios[1] == '@'
                             statement = linea
                         elif linea.startswith('Explanation:-') :
                             state = self.State.Explanation 
                             e = linea
-                        elif lineaSinEspacios[0]== 'Q' and lineaSinEspacios[2] == ')':
-                            state = self.State.Statement
-                            q.addOption(statement, isCorrect)
-                            self.quests.append(q)
-                            statement = linea
                         else:
                             statement += ' ' + linea
                     case self.State.Explanation:
-                        if lineaSinEspacios[0] == '@' : 
-                            state = self.State.Option
-                            q.addOption(statement, isCorrect, e)
-                            isCorrect = lineaSinEspacios[1] == '@'
-                            statement =  linea
-                        elif lineaSinEspacios[0]== 'Q' and lineaSinEspacios[2] == ')':
+                        if patronPregunta.search(lineaSinEspacios) != None:
                             state = self.State.Statement
+                            statement = statement.replace('@', ' ').lstrip()
                             q.addOption(statement, isCorrect, e)
                             self.quests.append(q)
                             statement = linea
+                        
+                        elif lineaSinEspacios[0] == '@' : 
+                            state = self.State.Option
+                            statement = statement.replace('@', ' ').lstrip()
+                            q.addOption(statement, isCorrect, e)
+                            isCorrect = lineaSinEspacios[1] == '@'
+                            statement =  linea
                         else:
                             e = ' ' + linea  
                 
 
     #seleciona <num> pregntas aleatorias
     def getRandomQuest(self, num : int) -> list[Quest]:
+        if num > len(self.quests):
+            num =len(self.quests)
+            print("El test solo contiene ", num, " preguntas")
         return random.choices(self.quests, k = num)
+
+    def getQuests(self) -> list[Quest]:
+        return self.quests
 
     def __str__(self) -> str:
         string = 'Preguntas : \n'
@@ -172,8 +208,9 @@ class Test:
 
 
 def main():
-    t = Test('test2.md', 'testPdf.pdf')
-    r = t.getRandomQuest(4)
+
+    t = Test('test2.md')
+    r = t.getQuests()
     for q in r:
         print(q)
 
