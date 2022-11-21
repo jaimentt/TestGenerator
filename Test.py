@@ -37,7 +37,7 @@ class Quest:
 
     #devuelve un array con los incies de las opciones correctas
     def getAnwsers(self):
-        return self.answers
+        return self.answer
 
     #devuelve answer es el conjunto de respuestas correctas
     #<answer> = conjunto de opciones seleccionadas
@@ -52,9 +52,9 @@ class Quest:
     
     def __str__(self) -> str:
         string = self.statement 
-        for a in self.options :
-            string += '\t' + a 
-        string += "Anwer :" + str(self.answer) 
+        for i,a in enumerate(self.options ):
+            string += '\t' + str(i) + ') ' + a 
+        ##string += "Anwer :" + str(self.answer) 
         return string
 
 class Test:
@@ -209,9 +209,25 @@ class Test:
 
 def main():
 
-    t = Test('test2.md')
-    r = t.getQuests()
+    t = Test('test2.md')    
+    acertadas = 0
+    totales = 20
+    r = t.getRandomQuest(totales)
     for q in r:
         print(q)
+        respuesta = input("Introduce las corretas separadas por un espacio: ")
+        aux = respuesta.split(" ")
+        aux2 = []
+        for i in aux:
+            aux2.append( int(i))
+        if q.answerTest(aux2) :
+            print("Correcto")
+            acertadas += 1
+        else: 
+            print(aux2)
+            print("Las respuestas son : ", q.getAnwsers())
+        print ("------------------------")
 
-main()
+    print('Test finalizado: ', ((acertadas*100)/totales) , '%')
+
+main() 
