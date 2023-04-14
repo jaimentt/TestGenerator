@@ -219,7 +219,11 @@ def main():
         aux = respuesta.split(" ")
         aux2 = []
         for i in aux:
-            aux2.append( int(i))
+            try:
+                x = int(i)
+                aux2.append(x)
+            except: 
+                print()
         if q.answerTest(aux2) :
             print("Correcto")
             acertadas += 1
